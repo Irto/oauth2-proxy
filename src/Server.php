@@ -3,6 +3,7 @@ namespace Irto\OAuth2Proxy;
 
 use React;
 use Illuminate\Container\Container;
+use Illuminate\Pipeline\Pipeline;
 
 class Server extends Container {
 
@@ -113,42 +114,48 @@ class Server extends Container {
      */
     public function handleRequest($request, $response)
     {
-        $proxyRequest = $this->createProxyRequestTo(
-            $request,
-            function ($result) use ($response) {
-                // pass header to new response
-                $response->writeHead(
-                    $result->getCode(),
-                    $result->getHeaders()
+        (new Pipeline($this))
+            // create request to be transformed in middlewares
+            ->send($this->createProxyRequestTo($request))
+            ->through([]) //middlewares
+            ->then(function($request) use ($response) {
+                $request->on(
+                    'response', 
+                    // work with response when get it
+                    function ($result) use ($response) {
+                        // pass header to new response
+                        $response->writeHead(
+                            $result->getCode(),
+                            $result->getHeaders()
+                        );
+
+                        // when get response wait and send data
+                        $result->on('data', array($response, 'end'));
+                    }
                 );
 
-                // when get response, send it
-                $result->on('data', array($response, 'end'));
-            }
-        );
-
-        $proxyRequest->end();
+                $request->end();
+                return $response;
+            });
     }
 
     /**
+     * Create a request to API
      * 
      * @param React\Http\Request $request
-     * @param callable $callback
      * 
      * @return React\HttpClient\Request
      */
-    protected function createProxyRequestTo($request, $callback)
+    protected function createProxyRequestTo($request)
     {
         $client = $this->make('React\HttpClient\Factory');
         $url = $this->get('api_url');
 
         $request = $client->request(
-            $request->getMethod(),
-            $url . $request->getPath(),
-            $request->getHeaders()
+            $request->getMethod(), // HTML Method Verb
+            $url . $request->getPath(), // create URL to API
+            $request->getHeaders() // Headers
         );
-
-        $request->on('response', $callback);
 
         return $request;
     }
