@@ -2,17 +2,26 @@
 namespace Irto\OAuth2Proxy;
 
 use React;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Container\Container;
 use Illuminate\Pipeline\Pipeline;
+use Illuminate\Session\SessionServiceProvider;
+use Illuminate\Session\TokenMismatchException;
+use Illuminate\Session\FileSessionHandler;
 
 class Server extends Container {
 
     /**
-     * Configuration values
+     * Configuration middlewares
      * 
      * @var array
      */
-    protected $config = [];
+    protected $middlewares = array(
+        'Irto\OAuth2Proxy\Middleware\Session',
+        'Irto\OAuth2Proxy\Middleware\CSRFToken',
+        'Irto\OAuth2Proxy\Middleware\Authorization',
+    );
 
     /**
      * Create a new Irto\OAuth2Proxy\Server instance with $config
@@ -25,7 +34,13 @@ class Server extends Container {
     {
         $server = new static();
 
-        array_walk($config, array($server, 'set'));
+        $server->singleton('config', function ($server) use ($config) {
+            return new Collection($config);
+        });
+
+        $server->bind('Irto\OAuth2Proxy\Server', function ($server) {
+            return $server;
+        });
 
         // Create main loop React\EventLoop based
         $server->singleton('React\EventLoop\Factory', function ($server) {
@@ -39,7 +54,7 @@ class Server extends Container {
         });
 
         // HTTP Client
-        $server->singleton('React\HttpClient\Factory', function ($server) {
+        $server->singleton('React\HttpClient\Client', function ($server) {
             $factory = new React\HttpClient\Factory();
             return $factory->create(
                 $server['React\EventLoop\Factory'], 
@@ -61,7 +76,26 @@ class Server extends Container {
             return new React\Http\Server($server['React\Socket\Server']);
         });
 
+        // HTTP server for handle requests
+        $server->singleton('SessionHandlerInterface', function ($server) {
+            return new FileSessionHandler(
+                $server['Illuminate\Filesystem\Filesystem'], 
+                array_get($server['config']->all(), 'session.folder')
+            );
+        });
+
+        $server->boot();
+
         return $server;
+    }
+
+    /**
+     * Boot application
+     * 
+     * @return self
+     */
+    public function boot()
+    {
     }
 
     /**
@@ -78,21 +112,6 @@ class Server extends Container {
     }
 
     /**
-     * Configure some $key with $value
-     * 
-     * @param mixed $value
-     * @param string $key
-     * 
-     * @return self
-     */
-    public function set($value, $key)
-    {
-        $this->config[$key] = $value;
-
-        return $this;
-    }
-
-    /**
      * Return some configured info
      * 
      * @param string $key
@@ -101,7 +120,39 @@ class Server extends Container {
      */
     public function get($key)
     {
-        return $this->config[$key];
+        return $this['config']->get($key);
+    }
+
+    /**
+     * Return middlewares
+     * 
+     * @param bool $reverse order
+     * 
+     * @return Illuminate\Support\Collection
+     */
+    public function middlewares($reverse = false)
+    {
+        return new Collection($reverse ? array_reverse($this->middlewares) : $this->middlewares);
+    }
+
+    /**
+     * Sends a data through configured middlewares
+     * 
+     * @param mixed $send
+     * @param string $via function to be called from middlewares
+     * @param bool $reverse order
+     * 
+     * @return Illuminate\Pipeline\Pipeline
+     */
+    public function throughMiddlewares($send, $via = 'handle', $reverse = false)
+    {
+        $middlewares = $this->middlewares($reverse);
+
+        return (new Pipeline($this))
+            // create request to be transformed in middlewares
+            ->via($via)
+            ->send($send)
+            ->through($middlewares->all()); //middlewares
     }
 
     /**
@@ -114,49 +165,54 @@ class Server extends Container {
      */
     public function handleRequest($request, $response)
     {
-        (new Pipeline($this))
-            // create request to be transformed in middlewares
-            ->send($this->createProxyRequestTo($request))
-            ->through([]) //middlewares
-            ->then(function($request) use ($response) {
-                $request->on(
-                    'response', 
-                    // work with response when get it
-                    function ($result) use ($response) {
-                        // pass header to new response
-                        $response->writeHead(
-                            $result->getCode(),
-                            $result->getHeaders()
-                        );
+        $request = $this->make('Irto\OAuth2Proxy\ProxyRequest', compact('request'));
+        $response = $this->make('Irto\OAuth2Proxy\ProxyResponse', compact('response', 'request'));
+        $request->setFutureResponse($response);
 
-                        // when get response wait and send data
-                        $result->on('data', array($response, 'end'));
-                    }
-                );
+        try {
+            return $this->throughMiddlewares($request, 'request')
+                ->then(function($request) use ($response) {
 
-                $request->end();
-                return $response;
-            });
-    }
+                    $request->on(
+                        'response', 
 
-    /**
-     * Create a request to API
-     * 
-     * @param React\Http\Request $request
-     * 
-     * @return React\HttpClient\Request
-     */
-    protected function createProxyRequestTo($request)
-    {
-        $client = $this->make('React\HttpClient\Factory');
-        $url = $this->get('api_url');
+                        /**
+                         * Get async response and send to user through middlewares
+                         * 
+                         * @param React\HttpClient\Response $result
+                         * @param React\Http\Response $response
+                         * 
+                         * @return void
+                         */
+                        function ($result) use ($response) {
+                            $response->mergeClientResponse($result);
 
-        $request = $client->request(
-            $request->getMethod(), // HTML Method Verb
-            $url . $request->getPath(), // create URL to API
-            $request->getHeaders() // Headers
-        );
+                            $result->on('data', function ($data) use ($response) {
+                                // send reponse to middlewares in reverse order
+                                $this->throughMiddlewares($response, 'response', true)->then(function ($response) use ($data) {
+                                    $response->dispatch($data); // sends response to user
+                                });
+                            });
+                        }
 
-        return $request;
+                    );
+
+                    $request->dispatch();// sends request to api
+                    return $response;
+                });
+        } catch (TokenMismatchException $e) {
+            $responseData = array(
+                'type' => 'token_mismatch',
+                'message' => 'Trying to do a not authorized action.'
+            );
+        } catch (\Exception $e) {
+            $responseData = array(
+                'type' => 'error',
+                'message' => $e->getMessage()
+            );
+        }
+
+        $response->headers()->put('Content-type', 'application/json');
+        $response->dispatch(json_encode($responseData), 500);
     }
 }
