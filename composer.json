@@ -1,0 +1,15 @@
+{
+    "require": {
+        "react/http": "0.*",
+        "illuminate/container": "5.*",
+        "react/http-client": "0.*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "4.5.*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Irto\\OAuth2Proxy\\": "src/"
+        }
+    }
+}
