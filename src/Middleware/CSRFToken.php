@@ -35,18 +35,19 @@ class CSRFToken {
      */    
     public function request($request, Closure $next) 
     {
-        $token = $request->headers()->get('X-CSRF-TOKEN');
+        $token = $request->headers()->get('X-XSRF-TOKEN');
+        $cookie = new Cookie('XSRF-TOKEN', $request->session()->token(), time() + 60 * 120, '/', null, false, false);
 
         if ( ! $token || $token != $request->session()->token()) {
             $request->session()->regenerateToken();
 
+            $request->futureResponse()->setCookie($cookie);
+
             throw new TokenMismatchException;
         } else {
             $response = $next($request);
+            $response->setCookie($cookie);
         }
-
-        $cookie = new Cookie('CSRF-TOKEN', $request->session()->token(), time() + 60 * 120, '/', null, false, false);
-        $response->setCookie($cookie);
 
         return $response;
     }

@@ -188,9 +188,14 @@ class Server extends Container {
                             $response->mergeClientResponse($result);
 
                             $result->on('data', function ($data) use ($response) {
+                                $response->addDataToBuffer($data);
+                            });
+
+                            $result->on('end', function () use ($response) {
+
                                 // send reponse to middlewares in reverse order
-                                $this->throughMiddlewares($response, 'response', true)->then(function ($response) use ($data) {
-                                    $response->dispatch($data); // sends response to user
+                                $this->throughMiddlewares($response, 'response', true)->then(function ($response) {
+                                    $response->dispatch(); // sends response to user
                                 });
                             });
                         }
@@ -213,6 +218,6 @@ class Server extends Container {
         }
 
         $response->headers()->put('Content-type', 'application/json');
-        $response->dispatch(json_encode($responseData), 500);
+        $response->dispatch(500, json_encode($responseData));
     }
 }

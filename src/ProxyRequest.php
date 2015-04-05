@@ -45,6 +45,12 @@ class ProxyRequest {
     protected $response = null;
 
     /**
+     * 
+     * @var string
+     */
+    protected $buffer = null;
+
+    /**
      * Headers not allowed to be proxied to API
      * 
      * @var array
@@ -78,6 +84,8 @@ class ProxyRequest {
         );
 
         $this->headers = $headers;
+
+        $request->on('data', array($this, 'write'));
     }
 
     /**
@@ -88,6 +96,35 @@ class ProxyRequest {
     public function headers()
     {
         return $this->headers;
+    }
+
+    /**
+     * 
+     * @return string
+     */
+    public function getBufferEnd()
+    {
+        $this->buffering = false;
+
+        return $this->buffer;
+    }
+
+    /**
+     * Write data to server or to buffer
+     * 
+     * @param string $data
+     * 
+     * @return self
+     */
+    public function write($data)
+    {
+        if ($this->buffering) {
+            $this->buffer .= $data;
+        } else {
+            $this->request->write($data);
+        }
+
+        return $this;
     }
 
     /**
@@ -148,7 +185,8 @@ class ProxyRequest {
         $url = $this->server->get('api_url') . $this->original->getPath();
         $headers = $this->headers()->all();
 
-        $this->createClientRequest($method, $url, $headers)->end();
+        $this->request = $this->createClientRequest($method, $url, $headers);
+        $this->request->end($this->getBufferEnd());
     }
 
     /**

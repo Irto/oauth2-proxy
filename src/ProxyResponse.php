@@ -42,6 +42,11 @@ class ProxyResponse {
     protected $request = null;
 
     /**
+     * @var string
+     */
+    protected $buffer = null;
+
+    /**
      * Headers not allowed to be proxied to API
      * 
      * @var array
@@ -83,6 +88,20 @@ class ProxyResponse {
     }
 
     /**
+     * Headers that will be passed to API
+     * 
+     * @param string $data
+     * 
+     * @return self
+     */
+    public function addDataToBuffer($data)
+    {
+        $this->buffer .= $data;
+
+        return $this;
+    }
+
+    /**
      * Add Cookies
      * 
      * @param Symfony\Component\HttpFoundation\Cookie $cookie
@@ -104,7 +123,7 @@ class ProxyResponse {
     /**
      * Originated request
      * 
-     * @return Illuminate\Support\Collection
+     * @return React\Http\Request
      */
     public function originRequest()
     {
@@ -113,6 +132,9 @@ class ProxyResponse {
 
     /**
      * 
+     * @param React\HttpClient\Response $clientResponse
+     * 
+     * @return self
      */
     public function mergeClientResponse($clientResponse)
     {  
@@ -123,19 +145,25 @@ class ProxyResponse {
         $this->headers = $headers->merge($this->headers()->all());
 
         $this->clientResponse = $clientResponse;
+
+        return $this;
     }
 
     /**
      * Ends request and dispatch
      * 
+     * @param int $code [false]
+     * @param string $data [null]
+     * 
      * @return void
      */
-    public function dispatch($data, $code = false)
+    public function dispatch($code = false, $data = null)
     {
         $code = $code ?: $this->clientResponse->getCode();
         $headers = $this->headers()->all();
 
+        $this->addDataToBuffer($data);
         $this->original->writeHead($code, $headers);
-        $this->original->end($data);
+        $this->original->end($this->buffer);
     }
 }
