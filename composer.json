@@ -1,4 +1,6 @@
 {
+    "name": "irto/oauth2-proxy",
+    "description": "A PHP Proxy for OAuth2 APIs to create safe Web Apps.",
     "require": {
         "react/http": "0.*",
         "react/http-client": "0.*",

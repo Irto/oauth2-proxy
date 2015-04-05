@@ -45,10 +45,24 @@ class ProxyRequest {
     protected $response = null;
 
     /**
+     * Origin Request
+     * 
+     * @var React\Http\Request
+     */
+    protected $request = null;
+
+    /**
      * 
      * @var string
      */
     protected $buffer = null;
+
+    /**
+     * Is 'false' after api connect has established
+     * 
+     * @var string
+     */
+    protected $buffering = true;
 
     /**
      * Headers not allowed to be proxied to API
