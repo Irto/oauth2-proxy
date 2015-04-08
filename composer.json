@@ -18,5 +18,17 @@
         "psr-4": {
             "Irto\\OAuth2Proxy\\": "src/"
         }
+    },
+    "authors": [
+        {
+            "name": "Israel Trindade",
+            "email": "irto@gamergrade.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "extra": {
+        "branch-alias": {
+            "dev-master": "master"
+        }
     }
 }

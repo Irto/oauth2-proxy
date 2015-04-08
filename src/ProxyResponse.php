@@ -47,6 +47,11 @@ class ProxyResponse {
     protected $buffer = null;
 
     /**
+     * @var string
+     */
+    protected $buffering = true;
+
+    /**
      * Headers not allowed to be proxied to API
      * 
      * @var array
@@ -57,6 +62,7 @@ class ProxyResponse {
         'Access-Control-Allow-Headers',
         'Connection',
         'Server',
+        'Keep-Alive',
     );
 
     /**
@@ -88,7 +94,7 @@ class ProxyResponse {
     }
 
     /**
-     * Headers that will be passed to API
+     * 
      * 
      * @param string $data
      * 
@@ -96,7 +102,11 @@ class ProxyResponse {
      */
     public function addDataToBuffer($data)
     {
-        $this->buffer .= $data;
+        if ($this->buffering) {
+            $this->buffer .= $data;
+        } else {
+            $this->response->write($data);
+        }
 
         return $this;
     }
@@ -137,7 +147,7 @@ class ProxyResponse {
      * @return self
      */
     public function mergeClientResponse($clientResponse)
-    {  
+    {
         $headers = new Collection(
             Arr::except($clientResponse->getHeaders(), $this->headersNotAllowed)
         );
@@ -150,20 +160,28 @@ class ProxyResponse {
     }
 
     /**
-     * Ends request and dispatch
+     * Dispatch headers and buffered data to response
      * 
      * @param int $code [false]
      * @param string $data [null]
      * 
      * @return void
      */
-    public function dispatch($code = false, $data = null)
+    public function dispatch($code = false)
     {
         $code = $code ?: $this->clientResponse->getCode();
         $headers = $this->headers()->all();
 
-        $this->addDataToBuffer($data);
         $this->original->writeHead($code, $headers);
+        $this->original->write($this->buffer);
+    }
+
+    /**
+     * 
+     * 
+     */
+    public function end($data = null)
+    {
         $this->original->end($this->buffer);
     }
 }

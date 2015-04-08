@@ -186,17 +186,23 @@ class Server extends Container {
                          */
                         function ($result) use ($response) {
                             $response->mergeClientResponse($result);
-
-                            $result->on('data', function ($data) use ($response) {
+                            
+                            $result->on('data', function ($data) use ($response, $result) {
                                 $response->addDataToBuffer($data);
+
+                                if (strlen($data) === (int) $response->headers()->get('Content-Length', false)) {
+                                    $result->close();
+                                }
+
                             });
 
                             $result->on('end', function () use ($response) {
+                                $response->end();
+                            });
 
-                                // send reponse to middlewares in reverse order
-                                $this->throughMiddlewares($response, 'response', true)->then(function ($response) {
-                                    $response->dispatch(); // sends response to user
-                                });
+                            // send reponse to middlewares in reverse order
+                            $this->throughMiddlewares($response, 'response', true)->then(function ($response) {
+                                $response->dispatch(); // sends response to user
                             });
                         }
 
@@ -218,6 +224,7 @@ class Server extends Container {
         }
 
         $response->headers()->put('Content-type', 'application/json');
-        $response->dispatch(500, json_encode($responseData));
+        $response->dispatch(json_encode($responseData));
+        $response->end(json_encode($responseData));
     }
 }
