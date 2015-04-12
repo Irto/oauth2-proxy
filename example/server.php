@@ -17,6 +17,7 @@ $proxy = Irto\OAuth2Proxy\Server::create(array(
      * About server
      */
     'port' => 8080,
+    'verbose' => false,
 
     /**
      * Session Configurations

@@ -36,7 +36,7 @@ $proxy->run();
 ?>
 ```
 
-For run it's easy...
+It's easy to run
 
 ```
     $ php ./server.php

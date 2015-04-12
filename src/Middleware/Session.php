@@ -40,14 +40,18 @@ class Session {
 
         $config = $this->server['config']['session'];
         $session = $request->session();
-        $session->save();
 
         $response->setCookie(new Cookie(
             $session->getName(), $session->getId(), Carbon::now()->addMinutes($config['lifetime']),
             $config['path'], $config['domain'], array_get($config, 'secure', false)
         ));
 
-        return $next($request);
+        try {
+            return $next($request);
+        } catch (TokenMismatchException $e) {
+            $session->save();
+            throw $e;
+        }
     }
 
     /**
@@ -59,6 +63,10 @@ class Session {
      */
     public function response($response, Closure $next) 
     {
+        $response->originResponse()->on('end', function () use ($response) {
+            $response->originRequest()->session()->save();
+        });
+
         return $next($response);
     }
 }

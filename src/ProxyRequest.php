@@ -71,13 +71,14 @@ class ProxyRequest {
      */
     protected $headersNotAllowed = array(
         'User-Agent',
-        'Host'
+        'Host',
+        'X-XCSRF-TOKEN',
     );
 
     /**
      * Constructor
      * 
-     * @param React\HttpClient\Factory $client
+     * @param React\HttpClient\Client $client
      * @param Irto\OAuth2Proxy\Server $server
      * @param React\Http\Request $request original request
      * 
@@ -152,6 +153,16 @@ class ProxyRequest {
     }
 
     /**
+     * Original capsuled request
+     * 
+     * @return React\Http\Request
+     */
+    public function originRequest()
+    {
+        return $this->original;
+    }
+
+    /**
      * Future response for user
      * 
      * @return self
@@ -205,9 +216,11 @@ class ProxyRequest {
 
     /**
      * Generates request for HTTP Client (API), and add event listners
+     * 
      * @param string $method 
      * @param string $url
      * @param array $headers
+     * 
      * @return React\HttpClient\Request
      */
     protected function createClientRequest($method, $url, $headers)
@@ -221,5 +234,10 @@ class ProxyRequest {
         }
 
         return $request;
+    }
+
+    public function __call($method, $args)
+    {
+        return call_user_func_array(array($this->original, $method), $args);
     }
 }

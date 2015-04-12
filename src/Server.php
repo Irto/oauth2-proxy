@@ -13,6 +13,13 @@ use Illuminate\Session\FileSessionHandler;
 class Server extends Container {
 
     /**
+     * Booted middlewares
+     * 
+     * @var Illuminate\Support\Collection
+     */
+    private $_middlewares = array();
+
+    /**
      * Configuration middlewares
      * 
      * @var array
@@ -21,7 +28,15 @@ class Server extends Container {
         'Irto\OAuth2Proxy\Middleware\Session',
         'Irto\OAuth2Proxy\Middleware\CSRFToken',
         'Irto\OAuth2Proxy\Middleware\Authorization',
+        'Irto\OAuth2Proxy\Middleware\ProxyData',
     );
+
+    /**
+     * If are in verbose mode
+     * 
+     * @var boolean
+     */
+    protected $verbose = true;
 
     /**
      * Create a new Irto\OAuth2Proxy\Server instance with $config
@@ -33,6 +48,7 @@ class Server extends Container {
     public static function create(array $config)
     {
         $server = new static();
+        isset($config['verbose']) && $server->setVerbose($config['verbose']);
 
         $server->singleton('config', function ($server) use ($config) {
             return new Collection($config);
@@ -90,12 +106,23 @@ class Server extends Container {
     }
 
     /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        $this->log("\nCreating server...");
+    }
+
+    /**
      * Boot application
      * 
      * @return self
      */
     public function boot()
     {
+        $this->log("\nBooting...");
+
+        $this->_middlewares = new Collection($this->middlewares);
     }
 
     /**
@@ -108,6 +135,7 @@ class Server extends Container {
         $http = $this['React\Http\Server'];
         $http->on('request', array($this, 'handleRequest'));
 
+        $this->log("\n Starting main loop...");
         $this['React\EventLoop\Factory']->run();
     }
 
@@ -124,6 +152,20 @@ class Server extends Container {
     }
 
     /**
+     * Set server verbose mode
+     * 
+     * @param bool $bool
+     * 
+     * @return self
+     */
+    public function setVerbose($bool)
+    {
+        $this->verbose = (bool) $bool;
+
+        return $this;
+    }
+
+    /**
      * Return middlewares
      * 
      * @param bool $reverse order
@@ -132,7 +174,7 @@ class Server extends Container {
      */
     public function middlewares($reverse = false)
     {
-        return new Collection($reverse ? array_reverse($this->middlewares) : $this->middlewares);
+        return $reverse ? $this->_middlewares->reverse() : $this->_middlewares;
     }
 
     /**
@@ -172,7 +214,6 @@ class Server extends Container {
         try {
             return $this->throughMiddlewares($request, 'request')
                 ->then(function($request) use ($response) {
-
                     $request->on(
                         'response', 
 
@@ -186,19 +227,6 @@ class Server extends Container {
                          */
                         function ($result) use ($response) {
                             $response->mergeClientResponse($result);
-                            
-                            $result->on('data', function ($data) use ($response, $result) {
-                                $response->addDataToBuffer($data);
-
-                                if (strlen($data) === (int) $response->headers()->get('Content-Length', false)) {
-                                    $result->close();
-                                }
-
-                            });
-
-                            $result->on('end', function () use ($response) {
-                                $response->end();
-                            });
 
                             // send reponse to middlewares in reverse order
                             $this->throughMiddlewares($response, 'response', true)->then(function ($response) {
@@ -208,7 +236,6 @@ class Server extends Container {
 
                     );
 
-                    $request->dispatch();// sends request to api
                     return $response;
                 });
         } catch (TokenMismatchException $e) {
@@ -216,15 +243,40 @@ class Server extends Container {
                 'type' => 'token_mismatch',
                 'message' => 'Trying to do a not authorized action.'
             );
+            $code = 400;
         } catch (\Exception $e) {
+            $this->log("\nApplication get a exception: %s.", [$e->getMessage()]);
+
             $responseData = array(
                 'type' => 'error',
                 'message' => $e->getMessage()
             );
+            $code = 500;
         }
 
         $response->headers()->put('Content-type', 'application/json');
-        $response->dispatch(json_encode($responseData));
-        $response->end(json_encode($responseData));
+        $response->write(json_encode($responseData));
+        $response->dispatch($code);
+        $response->end();
+    }
+
+    /**
+     * Log a message
+     * 
+     * @param string message
+     * @param array $params tobe placed with {@link sprintf}
+     * 
+     * @return self
+     */
+    public function log($message, array $params = array())
+    {
+        array_unshift($params, $message);
+        $message = call_user_func_array('sprintf', $params);
+
+        if ($this->verbose) {
+            echo $message;
+        }
+
+        return $this;
     }
 }

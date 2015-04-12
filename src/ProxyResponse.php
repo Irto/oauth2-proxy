@@ -52,6 +52,11 @@ class ProxyResponse {
     protected $buffering = true;
 
     /**
+     * @var int
+     */
+    protected $code = null;
+
+    /**
      * Headers not allowed to be proxied to API
      * 
      * @var array
@@ -60,9 +65,8 @@ class ProxyResponse {
         'Access-Control-Allow-Origin',
         'Access-Control-Request-Method',
         'Access-Control-Allow-Headers',
-        'Connection',
         'Server',
-        'Keep-Alive',
+        'Vary',
     );
 
     /**
@@ -100,15 +104,26 @@ class ProxyResponse {
      * 
      * @return self
      */
-    public function addDataToBuffer($data)
+    public function write($data)
     {
         if ($this->buffering) {
             $this->buffer .= $data;
         } else {
-            $this->response->write($data);
+            $this->original->write($data);
         }
 
         return $this;
+    }
+
+    /**
+     * 
+     * @return string
+     */
+    public function getBufferEnd()
+    {
+        $this->buffering = false;
+
+        return $this->buffer;
     }
 
     /**
@@ -141,6 +156,48 @@ class ProxyResponse {
     }
 
     /**
+     * Originated response
+     * 
+     * @return React\HttpClient\Response
+     */
+    public function originResponse()
+    {
+        return $this->clientResponse;
+    }
+
+    /**
+     * 
+     * 
+     * @return int
+     */
+    public function dataLength()
+    {
+        return strlen($this->buffer);
+    }
+
+    /**
+     * Return response code
+     * 
+     * @return int
+     */
+    public function getCode()
+    {
+        return $this->code ?: $this->clientResponse->getCode();
+    }
+
+    /**
+     * Set response code
+     * 
+     * @return self
+     */
+    public function setCode($code)
+    {
+        $this->code = $code;
+
+        return $this;
+    }
+
+    /**
      * 
      * @param React\HttpClient\Response $clientResponse
      * 
@@ -153,7 +210,6 @@ class ProxyResponse {
         );
 
         $this->headers = $headers->merge($this->headers()->all());
-
         $this->clientResponse = $clientResponse;
 
         return $this;
@@ -169,19 +225,24 @@ class ProxyResponse {
      */
     public function dispatch($code = false)
     {
-        $code = $code ?: $this->clientResponse->getCode();
+        $code = $code ?: $this->getCode();
         $headers = $this->headers()->all();
 
         $this->original->writeHead($code, $headers);
-        $this->original->write($this->buffer);
+
+        $data = $this->getBufferEnd();
+        if (!empty($data)) $this->original->write($data);
     }
 
     /**
+     * Ends connection and send $data
      * 
+     * @param string $data [null]
      * 
+     * @return void
      */
     public function end($data = null)
     {
-        $this->original->end($this->buffer);
+        $this->original->end($data);
     }
 }
