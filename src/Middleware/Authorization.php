@@ -139,13 +139,16 @@ class Authorization {
             $request->headers()->put('Content-Length', $this->getContentLength($request));
         } else {
             $session = $request->session();
-            if ($auth = $session->get('oauth_grant', false)) {
-                $request->headers()->put('Authorization', "{$auth['token_type']} {$auth['access_token']}");
 
+            if ($credentials = $session->get('oauth_grant', false)) {
                 if ($request->originRequest()->getPath() == $this->server['config']->get('revoke_path')) {
                     $request->query()->put('token', $session->get('oauth_grant.access_token', false));
                 }
+            } else {
+                $credentials = $this->server->getClientCredentials();
             }
+
+            $request->headers()->put('Authorization', "{$credentials['token_type']} {$credentials['access_token']}");
         }
 
         return $next($request);

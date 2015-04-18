@@ -183,6 +183,21 @@ class ProxyRequest {
     }
 
     /**
+     * Creates a new session from request
+     * 
+     * @return lluminate\Session\Store
+     */
+    protected function createSession()
+    {
+        $sessionName = array_get($this->server['config']->all(), 'session.name');
+
+        return $this->session = $this->server->make('Illuminate\Session\Store', [
+            'name' => $sessionName,
+            'id' => array_get($this->headers()->get('Cookie')->all(), "cookies.{$sessionName}")
+        ]);
+    }
+
+    /**
      * Headers that will be passed to API
      * 
      * @return Illuminate\Session\Store
@@ -225,21 +240,6 @@ class ProxyRequest {
     }
 
     /**
-     * Creates a new session from request
-     * 
-     * @return lluminate\Session\Store
-     */
-    protected function createSession()
-    {
-        $sessionName = array_get($this->server['config']->all(), 'session.name');
-
-        return $this->session = $this->server->make('Illuminate\Session\Store', [
-            'name' => $sessionName,
-            'id' => array_get($this->headers()->get('Cookie')->all(), "cookies.{$sessionName}")
-        ]);
-    }
-
-    /**
      * Ends request and dispatch
      * 
      * @return void
@@ -249,8 +249,6 @@ class ProxyRequest {
         $method = $this->original->getMethod();
         $url = $this->server->get('api_url') . $this->getPath();
         $headers = $this->headers()->all();
-
-        var_dump($url);
 
         $this->request = $this->createClientRequest($method, $url, $headers);
         $this->request->end($this->getBufferEnd());

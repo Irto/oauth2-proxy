@@ -2,6 +2,7 @@
 namespace Irto\OAuth2Proxy\Middleware;
 
 use Closure;
+use Carbon\Carbon;
 use Illuminate\Session\TokenMismatchException;
 use Symfony\Component\HttpFoundation\Cookie;
 use Irto\OAuth2Proxy\Server;
@@ -36,9 +37,10 @@ class CSRFToken {
     public function request($request, Closure $next) 
     {
         $token = $request->headers()->get('X-XSRF-TOKEN');
+        $config = $this->server['config']['session'];
 
         if ( ! $token || $token != $request->session()->token()) {
-            $cookie = new Cookie('XSRF-TOKEN', $request->session()->token(), time() + 60 * 120, '/', null, false, false);
+            $cookie = new Cookie('XSRF-TOKEN', $request->session()->token(), Carbon::now()->addMinutes($config['lifetime']), '/', null, false, false);
             $request->futureResponse()->setCookie($cookie);
 
             throw new TokenMismatchException;

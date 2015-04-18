@@ -41,6 +41,12 @@ class Server extends Container {
     protected $verbose = true;
 
     /**
+     * 
+     * @var array
+     */
+    protected $clientCredentials = array();
+
+    /**
      * Create a new Irto\OAuth2Proxy\Server instance with $config
      * 
      * @param array $config
@@ -61,28 +67,28 @@ class Server extends Container {
         });
 
         // Create main loop React\EventLoop based
-        $server->singleton('React\EventLoop\Factory', function ($server) {
+        $server->singleton('React\EventLoop\LoopInterface', function ($server) {
             return React\EventLoop\Factory::create();
         });
 
         // DNS resolve, used for create async requests 
         $server->singleton('React\Dns\Resolver\Resolver', function ($server) {
             $dnsResolverFactory = new React\Dns\Resolver\Factory();
-            return $dnsResolverFactory->createCached('8.8.8.8', $server['React\EventLoop\Factory']); //Google DNS
+            return $dnsResolverFactory->createCached('8.8.8.8', $server['React\EventLoop\LoopInterface']); //Google DNS
         });
 
         // HTTP Client
         $server->singleton('React\HttpClient\Client', function ($server) {
             $factory = new React\HttpClient\Factory();
             return $factory->create(
-                $server['React\EventLoop\Factory'], 
+                $server['React\EventLoop\LoopInterface'], 
                 $server['React\Dns\Resolver\Resolver']
             );
         });
 
         // Request handler to React\Http
         $server->singleton('React\Socket\Server', function ($server) {
-            $socket = new React\Socket\Server($server['React\EventLoop\Factory']);
+            $socket = new React\Socket\Server($server['React\EventLoop\LoopInterface']);
 
             $socket->listen($server->get('port'));
 
@@ -125,6 +131,32 @@ class Server extends Container {
         $this->log('Booting...');
 
         $this->_middlewares = new Collection($this->middlewares);
+
+        $loop = $this['React\EventLoop\LoopInterface'];
+        $loop->addPeriodicTimer(60 * 30, array($this, 'garbageCollect'));
+
+        $loop->addPeriodicTimer(60 * 30, function () {
+            $memory = memory_get_usage() / 1024;
+            $formatted = number_format($memory, 3).'K';
+            $this->log('> Current memory usage: %s', [$formatted]);
+        });
+
+        $this->call(array($this, 'requestClientToken'));
+    }
+
+    /**
+     * Execute gabarage collect, like for sessions
+     * 
+     * @return void
+     */
+    public function garbageCollect()
+    {
+        $this->log('> Garbage Collector fired.');
+
+        $sessionHandler = $this['SessionHandlerInterface'];
+        $config = $this['config']['session'];
+        
+        $sessionHandler->gc($config['lifetime'] * 1.1);
     }
 
     /**
@@ -137,8 +169,82 @@ class Server extends Container {
         $http = $this['React\Http\Server'];
         $http->on('request', array($this, 'handleRequest'));
 
-        $this->log(' Starting main loop...');
-        $this['React\EventLoop\Factory']->run();
+        $this->log('> Main loop start.');
+        $this['React\EventLoop\LoopInterface']->run();
+    }
+
+    /**
+     * Update public access token
+     * 
+     * @return mixed
+     */
+    public function requestClientToken(React\HttpClient\Client $client, React\EventLoop\LoopInterface $loop)
+    {
+        $this->log('! Updating access token for public api.');
+
+        $url = $this['config']->get('api_url') . $this['config']->get('grant_path');
+
+        $data = json_encode(array(
+            'grant_type' => 'client_credentials',
+            'client_id' => $this['config']->get('client_id'),
+            'client_secret' => $this['config']->get('client_secret'),
+        ));
+
+        // create request to retrive access token
+        $request = $client->request('POST', $url, array(
+            'Content-Type' => 'application/json;charset=UTF-8',
+            'Content-Length' => strlen($data),
+        ));
+
+        $request->on('response', function ($response) use ($loop) {
+            // Response return an error message, it will log and exit
+            if ($response->getCode() >= 300 || $response->getCode() < 200) {
+                $this->log('!E! Ocorreu um erro ao tentar atualizar as credenciais de API pública.');
+
+                $response->on('data', function ($data) { $this->log($data); });
+                $response->on('end', function () { exit(0); });
+
+                return;
+            }
+
+            $buffer = null;
+
+            // buffer response data
+            $response->on('data', function ($data) use (&$buffer) {
+                $buffer .= $data;
+            });
+
+            $response->on('end', function () use (&$buffer, $loop) {
+                $this->clientCredentials = json_decode($buffer, true);
+
+                $this->log('> Access token updated! (%s)', [$buffer]);
+
+                $loop->addTimer(
+                    $this->getClientCredentials()['expires_in'] - 120,
+
+                    /**
+                     * Refresh client access token from api 2 minutes before expire
+                     * 
+                     * @return void
+                     */
+                    function () {
+                        $this->call(array($this, 'requestClientToken'));
+                    }
+                );
+            });
+        });
+
+        $request->end($data);
+    }
+
+    /**
+     * 
+     * 
+     * @return array
+     */
+    public function getClientCredentials()
+    {
+        return $this->clientCredentials;
     }
 
     /**
@@ -273,7 +379,7 @@ class Server extends Container {
     public function log($message, array $params = array())
     {
         array_unshift($params, $message);
-        $message = "\n" . call_user_func_array('sprintf', $params);
+        $message = call_user_func_array('sprintf', $params) . "\n";
 
         if ($this->verbose) {
             echo $message;
