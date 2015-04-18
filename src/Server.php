@@ -10,6 +10,8 @@ use Illuminate\Session\SessionServiceProvider;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Session\FileSessionHandler;
 
+use Irto\OAuth2Proxy\ProxyResponse;
+
 class Server extends Container {
 
     /**
@@ -110,7 +112,7 @@ class Server extends Container {
      */
     public function __construct()
     {
-        $this->log("\nCreating server...");
+        $this->log('Creating server...');
     }
 
     /**
@@ -120,7 +122,7 @@ class Server extends Container {
      */
     public function boot()
     {
-        $this->log("\nBooting...");
+        $this->log('Booting...');
 
         $this->_middlewares = new Collection($this->middlewares);
     }
@@ -135,7 +137,7 @@ class Server extends Container {
         $http = $this['React\Http\Server'];
         $http->on('request', array($this, 'handleRequest'));
 
-        $this->log("\n Starting main loop...");
+        $this->log(' Starting main loop...');
         $this['React\EventLoop\Factory']->run();
     }
 
@@ -229,8 +231,8 @@ class Server extends Container {
                             $response->mergeClientResponse($result);
 
                             // send reponse to middlewares in reverse order
-                            $this->throughMiddlewares($response, 'response', true)->then(function ($response) {
-                                $response->dispatch(); // sends response to user
+                            $this->throughMiddlewares($response, 'response')->then(function ($response) {
+                                if ($response instanceof ProxyResponse) $response->dispatch(); // sends response to user
                             });
                         }
 
@@ -245,7 +247,7 @@ class Server extends Container {
             );
             $code = 400;
         } catch (\Exception $e) {
-            $this->log("\nApplication get a exception: %s.", [$e->getMessage()]);
+            $this->log('Application get a exception: %s.', [$e->getMessage()]);
 
             $responseData = array(
                 'type' => 'error',
@@ -271,7 +273,7 @@ class Server extends Container {
     public function log($message, array $params = array())
     {
         array_unshift($params, $message);
-        $message = call_user_func_array('sprintf', $params);
+        $message = "\n" . call_user_func_array('sprintf', $params);
 
         if ($this->verbose) {
             echo $message;

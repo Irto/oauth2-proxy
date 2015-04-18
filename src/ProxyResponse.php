@@ -160,9 +160,19 @@ class ProxyResponse {
      * 
      * @return React\HttpClient\Response
      */
-    public function originResponse()
+    public function clientResponse()
     {
         return $this->clientResponse;
+    }
+
+    /**
+     * Originated response
+     * 
+     * @return React\Http\Response
+     */
+    public function originResponse()
+    {
+        return $this->original;
     }
 
     /**
@@ -208,8 +218,9 @@ class ProxyResponse {
         $headers = new Collection(
             Arr::except($clientResponse->getHeaders(), $this->headersNotAllowed)
         );
+        $headers->forget(0);
 
-        $this->headers = $headers->merge($this->headers()->all());
+        $this->headers = $this->headers()->merge($headers->all());
         $this->clientResponse = $clientResponse;
 
         return $this;
@@ -229,8 +240,8 @@ class ProxyResponse {
         $headers = $this->headers()->all();
 
         $this->original->writeHead($code, $headers);
-
         $data = $this->getBufferEnd();
+
         if (!empty($data)) $this->original->write($data);
     }
 

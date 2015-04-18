@@ -30,7 +30,7 @@ class ProxyData {
      */
     public function response($response, Closure $next) 
     {
-        $original = $response->originResponse();
+        $original = $response->clientResponse();
 
         $original->on('data', function ($data) use ($response, $original) {
             $response->write($data);

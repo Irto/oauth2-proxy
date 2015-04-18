@@ -65,6 +65,13 @@ class ProxyRequest {
     protected $buffering = true;
 
     /**
+     * Query string
+     * 
+     * @var Illuminate\Support\Collection
+     */
+    protected $query = null;
+
+    /**
      * Headers not allowed to be proxied to API
      * 
      * @var array
@@ -91,6 +98,7 @@ class ProxyRequest {
         $this->original = $request;
         $this->client = $client;
         $this->server = $server;
+        $this->query = new Collection;
 
         $headers = new Collection($headers);
         $headers->put(
@@ -133,9 +141,9 @@ class ProxyRequest {
      */
     public function write($data)
     {
-        if ($this->buffering) {
-            $this->buffer .= $data;
-        } else {
+        $this->buffer .= $data;
+        
+        if (!$this->buffering) {
             $this->request->write($data);
         }
 
@@ -185,6 +193,38 @@ class ProxyRequest {
     }
 
     /**
+     * Return requested path
+     * 
+     * @return string
+     */
+    public function getPath()
+    {
+        $path = $this->original->getPath();
+
+        if (!$this->query()->isEmpty()) {
+            return $path . trim(array_reduce(
+                ($query = $this->query()->all()),
+                function ($string, $item) use ($query) {
+                    return $string . array_search($item, $query) . '=' . $item . '&';
+                },
+                '?'
+            ), '&');
+        }
+
+        return $path;
+    }
+
+    /**
+     * Query string params
+     * 
+     * @return Illuminate\Support\Collection
+     */
+    public function query()
+    {
+        return $this->query;
+    }
+
+    /**
      * Creates a new session from request
      * 
      * @return lluminate\Session\Store
@@ -207,11 +247,23 @@ class ProxyRequest {
     public function dispatch()
     {
         $method = $this->original->getMethod();
-        $url = $this->server->get('api_url') . $this->original->getPath();
+        $url = $this->server->get('api_url') . $this->getPath();
         $headers = $this->headers()->all();
+
+        var_dump($url);
 
         $this->request = $this->createClientRequest($method, $url, $headers);
         $this->request->end($this->getBufferEnd());
+    }
+
+    /**
+     * Reenvia o pedido
+     * 
+     * @return void
+     */
+    public function retry()
+    {
+        return $this->dispatch();
     }
 
     /**
