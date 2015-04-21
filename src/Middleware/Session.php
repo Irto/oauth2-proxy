@@ -2,9 +2,11 @@
 namespace Irto\OAuth2Proxy\Middleware;
 
 use Closure;
-use Symfony\Component\HttpFoundation\Cookie;
-use Irto\OAuth2Proxy\Server;
 use Carbon\Carbon;
+use Illuminate\Session\TokenMismatchException;
+use Symfony\Component\HttpFoundation\Cookie;
+
+use Irto\OAuth2Proxy\Server;
 
 class Session {
 
