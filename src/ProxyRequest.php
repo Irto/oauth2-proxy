@@ -103,7 +103,7 @@ class ProxyRequest {
         $headers = new Collection($headers);
         $headers->put(
             'Cookie', 
-            new Collection(\http_parse_cookie($headers->get('Cookie')))
+            new Collection((new \Guzzle\Parser\Cookie\CookieParser)->parseCookie($headers->get('Cookie')))
         );
 
         $this->headers = $headers;
