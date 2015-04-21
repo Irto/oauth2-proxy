@@ -218,7 +218,6 @@ class ProxyResponse {
         $headers = new Collection(
             Arr::except($clientResponse->getHeaders(), $this->headersNotAllowed)
         );
-        $headers->forget(0);
 
         $this->headers = $this->headers()->merge($headers->all());
         $this->clientResponse = $clientResponse;
