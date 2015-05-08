@@ -232,7 +232,7 @@ class Authorization {
             if ($clientResponse->getCode() != 200) {
                 $clientResponse->on('data', function ($data) use ($clientResponse, $request, $callback, $session) {
                     $session->forget('oauth_grant');
-                    $this->server->log('> Não foi possível autenticar o usuário utilizando o refresh token (%s).', [$data]);
+                    $this->server->log('Não foi possível autenticar o usuário utilizando o refresh token (%s).', [$data]);
                 });
 
                 return $callback($clientResponse);

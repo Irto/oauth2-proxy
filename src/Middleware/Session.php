@@ -27,6 +27,7 @@ class Session {
     }
 
     /**
+     * Catch a proxied request
      * 
      * @param Irto\OAuth2Proxy\ProxyRequest $request
      * @param Closure $next
@@ -57,6 +58,7 @@ class Session {
     }
 
     /**
+     * Catch response from request to api
      * 
      * @param React\Http\Response $response
      * @param Closure $next
@@ -66,7 +68,11 @@ class Session {
     public function response($response, Closure $next) 
     {
         $response->originResponse()->on('end', function () use ($response) {
-            $response->originRequest()->session()->save();
+            if (!pcntl_fork()) {
+                // do it async to main loop
+                $response->originRequest()->session()->save();
+                exit();
+            }
         });
 
         return $next($response);

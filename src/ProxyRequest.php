@@ -248,7 +248,7 @@ class ProxyRequest {
     {
         $method = $this->original->getMethod();
         $url = $this->server->get('api_url') . $this->getPath();
-        $headers = $this->headers()->all();
+        $headers = Arr::except($this->headers()->all(), ['Cookie']);
 
         $this->request = $this->createClientRequest($method, $url, $headers);
         $this->request->end($this->getBufferEnd());
@@ -286,6 +286,14 @@ class ProxyRequest {
         return $request;
     }
 
+    /**
+     * Forward methods call to original request from HTTP Server.
+     * 
+     * @param string $method
+     * @param array $args
+     * 
+     * @return mixed
+     */
     public function __call($method, $args)
     {
         return call_user_func_array(array($this->original, $method), $args);

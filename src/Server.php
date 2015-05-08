@@ -138,7 +138,7 @@ class Server extends Container {
         $loop->addPeriodicTimer(60 * 30, function () {
             $memory = memory_get_usage() / 1024;
             $formatted = number_format($memory, 3).'K';
-            $this->log('> Current memory usage: %s', [$formatted]);
+            $this->log('Current memory usage: %s', [$formatted]);
         });
 
         $this->call(array($this, 'requestClientToken'));
@@ -151,7 +151,7 @@ class Server extends Container {
      */
     public function garbageCollect()
     {
-        $this->log('> Garbage Collector fired.');
+        $this->log('Garbage Collector fired.');
 
         $sessionHandler = $this['SessionHandlerInterface'];
         $config = $this['config']['session'];
@@ -169,7 +169,7 @@ class Server extends Container {
         $http = $this['React\Http\Server'];
         $http->on('request', array($this, 'handleRequest'));
 
-        $this->log('> Main loop start.');
+        $this->log('Main loop start.');
         $this['React\EventLoop\LoopInterface']->run();
     }
 
@@ -217,7 +217,7 @@ class Server extends Container {
             $response->on('end', function () use (&$buffer, $loop) {
                 $this->clientCredentials = json_decode($buffer, true);
 
-                $this->log('> Access token updated! (%s)', [$buffer]);
+                $this->log('Access token updated! (%s)', [$buffer]);
 
                 $loop->addTimer(
                     $this->getClientCredentials()['expires_in'] - 120,
@@ -382,7 +382,7 @@ class Server extends Container {
         $message = call_user_func_array('sprintf', $params) . "\n";
 
         if ($this->verbose) {
-            echo $message;
+            echo date('Y-m-d H:i:s') . '> ' . $message;
         }
 
         return $this;
