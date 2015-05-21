@@ -142,7 +142,7 @@ class Server extends Container {
         });
 
         $this['SessionHandlerInterface']->open(
-            null,
+            array_get($this['config']->all(), 'redis.url'),
             array_get($this['config']->all(), 'session.name')
         )->then(function () {
             $this->call(array($this, 'requestClientToken'));

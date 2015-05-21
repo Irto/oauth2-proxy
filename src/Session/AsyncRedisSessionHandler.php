@@ -41,7 +41,7 @@ class AsyncRedisSessionHandler implements SessionHandlerInterface {
      */
     public function open($savePath, $sessionName)
     {
-        return $this->factory->createClient()->then(function ($client) {
+        return $this->factory->createClient($savePath)->then(function ($client) {
             $this->client = $client;
         }, function ($e) {
             throw $e;

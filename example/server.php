@@ -25,13 +25,16 @@ $proxy = Irto\OAuth2Proxy\Server::create(array(
      * See more about in Illuminate (from Laravel) Session.
      */
     'session' => [
-        'driver' => 'file',
         'folder' => '../storage/sessions/',
         'name' => 'tests',
         'path' => '/',
         'domain' => 'webdomain.dev',
         'lifetime' => 3600,
-    ]
+    ],
+
+    'redis' => [
+        'url' => 'localhost'
+    ],
         
 ));
 
