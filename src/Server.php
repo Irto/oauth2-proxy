@@ -8,7 +8,6 @@ use Illuminate\Container\Container;
 use Illuminate\Pipeline\Pipeline;
 use Illuminate\Session\SessionServiceProvider;
 use Illuminate\Session\TokenMismatchException;
-use Illuminate\Session\FileSessionHandler;
 
 use Irto\OAuth2Proxy\ProxyResponse;
 
@@ -102,11 +101,12 @@ class Server extends Container {
 
         // HTTP server for handle requests
         $server->singleton('SessionHandlerInterface', function ($server) {
-            return new FileSessionHandler(
-                $server['Illuminate\Filesystem\Filesystem'], 
-                array_get($server['config']->all(), 'session.folder')
-            );
+            return $server->make('Irto\OAuth2Proxy\Session\AsyncRedisSessionHandler', [
+                'lifetime' => array_get($server['config']->all(), 'session.lifetime')
+            ]);
         });
+
+        $server->bind('Illuminate\Session\Store', 'Irto\OAuth2Proxy\Session\Store');
 
         $server->boot();
 
@@ -141,7 +141,12 @@ class Server extends Container {
             $this->log('Current memory usage: %s', [$formatted]);
         });
 
-        $this->call(array($this, 'requestClientToken'));
+        $this['SessionHandlerInterface']->open(
+            null,
+            array_get($this['config']->all(), 'session.name')
+        )->then(function () {
+            $this->call(array($this, 'requestClientToken'));
+        });
     }
 
     /**
@@ -199,10 +204,23 @@ class Server extends Container {
         $request->on('response', function ($response) use ($loop) {
             // Response return an error message, it will log and exit
             if ($response->getCode() >= 300 || $response->getCode() < 200) {
-                $this->log('!E! Ocorreu um erro ao tentar atualizar as credenciais de API pública.');
+                $this->log('!E! Got error on update API public credentials.');
 
                 $response->on('data', function ($data) { $this->log($data); });
-                $response->on('end', function () { exit(0); });
+
+                $loop->addTimer(
+                    5,
+
+                    /**
+                     * Attempt refresh token every 5 seconds until it's work.
+                     * 
+                     * @return void
+                     */
+                    function () {
+                        $this->log('!E! Retring get API public credentials.');
+                        $this->call(array($this, 'requestClientToken'));
+                    }
+                );
 
                 return;
             }
@@ -346,20 +364,33 @@ class Server extends Container {
 
                     return $response;
                 });
-        } catch (TokenMismatchException $e) {
-            $responseData = array(
-                'type' => 'token_mismatch',
-                'message' => 'Trying to do a not authorized action.'
-            );
-            $code = 400;
         } catch (\Exception $e) {
-            $this->log('Application get a exception: %s.', [$e->getMessage()]);
+            return $this->catchException($e, $response);
+        }
+    }
 
-            $responseData = array(
-                'type' => 'error',
-                'message' => $e->getMessage()
-            );
-            $code = 500;
+    /**
+     * 
+     */
+    public function catchException($e, $response)
+    {
+
+        switch (true) {
+            case $e instanceof TokenMismatchException:
+                $responseData = array(
+                    'type' => 'token_mismatch',
+                    'message' => 'Trying to do a not authorized action.'
+                );
+                $code = 400;
+                break;
+            default:
+                $this->log('Application get a exception: %s %s.', [$e->getMessage()]);
+                
+                $responseData = array(
+                    'type' => 'error',
+                    'message' => $e->getMessage()
+                );
+                $code = 500;
         }
 
         $response->headers()->put('Content-type', 'application/json');

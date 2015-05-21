@@ -48,14 +48,22 @@ class Authorization {
     {
         $original = $request->originRequest();
 
-        $original->removeAllListeners('data');
-        $original->on('data', function ($data) use ($request, $original) {
-            $this->bufferData($data);
+        $data = $request->getBufferClean();
+        $this->bufferData($data);
 
-            if ($this->bufferLength() == (int) $original->getHeaders()['Content-Length']) {
-                $request->write($this->getDataEnd(true));
-            }
-        });
+        $original->removeAllListeners('data');
+        if ($this->bufferLength() == (int) $original->getHeaders()['Content-Length']) {
+            $request->write($this->getDataEnd(true));
+        } else {
+            $original->on('data', function ($data) use ($request, $original) {
+                $this->bufferData($data);
+
+                if ($this->bufferLength() == (int) $original->getHeaders()['Content-Length']) {
+                    $request->write($this->getDataEnd(true));
+                }
+            });
+        }
+
     }
 
     /**

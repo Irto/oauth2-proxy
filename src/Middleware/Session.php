@@ -39,22 +39,25 @@ class Session {
     public function request($request, Closure $next) 
     {
         $response = $request->futureResponse();
-        $request->session()->start();
 
-        $config = $this->server['config']['session'];
-        $session = $request->session();
+        $request->session()->start()->then(function () use ($response, $request, $next) {
+            $config = $this->server['config']['session'];
+            $session = $request->session();
 
-        $response->setCookie(new Cookie(
-            $session->getName(), $session->getId(), Carbon::now()->addMinutes($config['lifetime']),
-            $config['path'], $config['domain'], array_get($config, 'secure', false)
-        ));
+            $response->setCookie(new Cookie(
+                $session->getName(), $session->getId(), Carbon::now()->addMinutes($config['lifetime']),
+                $config['path'], $config['domain'], array_get($config, 'secure', false)
+            ));
 
-        try {
-            return $next($request);
-        } catch (TokenMismatchException $e) {
-            $session->save();
-            throw $e;
-        }
+            try {
+                return $next($request);
+            } catch (\Exception $e) {
+                $session->save();
+                $this->server->catchException($e, $response);
+            }
+        }, function ($e) use ($response) {
+            return $this->server->catchException($e, $response);
+        });
     }
 
     /**
@@ -68,11 +71,7 @@ class Session {
     public function response($response, Closure $next) 
     {
         $response->originResponse()->on('end', function () use ($response) {
-            if (!pcntl_fork()) {
-                // do it async to main loop
-                $response->originRequest()->session()->save();
-                exit();
-            }
+            $response->originRequest()->session()->save();
         });
 
         return $next($response);

@@ -133,6 +133,18 @@ class ProxyRequest {
     }
 
     /**
+     * 
+     * @return string
+     */
+    public function getBufferClean()
+    {
+        $data = $this->buffer;
+        $this->buffer = null;
+
+        return $data;
+    }
+
+    /**
      * Write data to server or to buffer
      * 
      * @param string $data
