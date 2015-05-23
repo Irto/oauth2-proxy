@@ -384,7 +384,7 @@ class Server extends Container {
                 $code = 400;
                 break;
             default:
-                $this->log('Application get a exception: %s %s.', [$e->getMessage()]);
+                $this->log('Application get a exception: %s.', [$e->getMessage()]);
                 
                 $responseData = array(
                     'type' => 'error',
