@@ -87,7 +87,7 @@ class AsyncRedisSessionHandler implements SessionHandlerInterface {
         });
 
         // server statistics for redis connection
-        $this->loop->addPeriodicTimer(60 * 1, function () {
+        $this->loop->addPeriodicTimer(60 * 30, function () {
             $this->server->log('Server statistics to the last 30 minutes.');
             $this->server->log('Best time of %fs, poor time of %fs and a average of %f seconds for total %d connections.', array_values($this->statistics));
 
