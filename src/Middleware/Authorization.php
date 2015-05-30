@@ -195,9 +195,9 @@ class Authorization {
 
         $session = $request->session();
 
-        if ($original->getCode() == 401 && ($refreshToken = $session->get('oauth_grant.refresh_token', false))) {
+        if ($original->getCode() == 401 && $session->has('oauth_grant.refresh_token')) {
             $original->removeAllListeners('data');
-            $this->updateCredentials($response, function ($clientResponse) use ($response, $request, $next) {
+            $this->updateCredentials($response, function ($clientResponse) use ($response, $request, $next, $session) {
 
                 $request->removeAllListeners('response');
                 $request->on('response', function ($original) use ($next, $response) {
@@ -205,6 +205,9 @@ class Authorization {
 
                     $next($response);
                 });
+
+                $credentials = $session->get('oauth_grant');
+                $request->headers()->put('Authorization', "{$credentials['token_type']} {$credentials['access_token']}");
 
                 $request->retry();
             });
