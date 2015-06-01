@@ -74,7 +74,7 @@ class AsyncRedisSessionHandler implements SessionHandlerInterface {
 
         // PING redis connection every 5 minutes
         // and try to reconnect on connection error
-        $this->timer = $loop->addPeriodicTimer(60 * 5, function () use ($server) {
+        $this->timer = $loop->addPeriodicTimer(60 * 1, function () use ($server) {
             $this->promise->then(function ($client) use ($server) {
                 $client->PING()->then(function ($pong) use ($server) {
                     $server->log('Redis server responded ping with: %s', [$pong]);
