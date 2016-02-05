@@ -36,9 +36,9 @@ class CSRFToken {
      */    
     public function request($request, Closure $next) 
     {
-        $token = $request->headers()->get('X-XSRF-TOKEN');
+        $token = $request->headers()->get('x-xsrf-token');
         $config = $this->server['config']['session'];
-
+var_dump($token, $request->headers()->all());
         if ( ! $token || $token != $request->session()->token()) {
             $cookie = new Cookie('XSRF-TOKEN', $request->session()->token(), Carbon::now()->addMinutes($config['lifetime']), '/', null, false, false);
             $request->futureResponse()->setCookie($cookie);

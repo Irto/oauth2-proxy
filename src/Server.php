@@ -393,7 +393,7 @@ class Server extends Container {
                 $code = 500;
         }
 
-        $response->headers()->put('Content-type', 'application/json');
+        $response->headers()->put('content-type', 'application/json');
         $response->write(json_encode($responseData));
         $response->dispatch($code);
         $response->end();

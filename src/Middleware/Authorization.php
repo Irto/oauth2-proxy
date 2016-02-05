@@ -52,13 +52,13 @@ class Authorization {
         $this->bufferData($data);
 
         $original->removeAllListeners('data');
-        if ($this->bufferLength() == (int) $original->getHeaders()['Content-Length']) {
+        if ($this->bufferLength() == (int) $request->headers()->get('content-length')) {
             $request->write($this->getDataEnd(true));
         } else {
             $original->on('data', function ($data) use ($request, $original) {
                 $this->bufferData($data);
 
-                if ($this->bufferLength() == (int) $original->getHeaders()['Content-Length']) {
+                if ($this->bufferLength() == (int) $request->headers()->get('content-length')) {
                     $request->write($this->getDataEnd(true));
                 }
             });
@@ -95,7 +95,7 @@ class Authorization {
      */
     protected function getContentLength($request)
     {
-        $length = (int) $request->headers()->get('Content-Length');
+        $length = (int) $request->headers()->get('content-length');
 
         return $length + strlen(json_encode($this->getOAuthCredentials())) - 1;
     }
@@ -144,7 +144,7 @@ class Authorization {
     {
         if ($request->originRequest()->getPath() == $this->server['config']->get('grant_path')) {
             $this->proxyContent($request);
-            $request->headers()->put('Content-Length', $this->getContentLength($request));
+            $request->headers()->put('content-length', $this->getContentLength($request));
         } else {
             $session = $request->session();
 
@@ -156,7 +156,7 @@ class Authorization {
                 $credentials = $this->server->getClientCredentials();
             }
 
-            $request->headers()->put('Authorization', "{$credentials['token_type']} {$credentials['access_token']}");
+            $request->headers()->put('authorization', "{$credentials['token_type']} {$credentials['access_token']}");
         }
 
         return $next($request);
@@ -182,7 +182,7 @@ class Authorization {
             $original->on('data', function ($data) use ($response, $original) {
                 $this->bufferData($data);
 
-                if ($response->dataLength() === (int) $response->headers()->get('Content-Length', -1)) {
+                if ($response->dataLength() === (int) $response->headers()->get('content-length', -1)) {
                     $original->close();
                 }
             });
@@ -207,7 +207,7 @@ class Authorization {
                 });
 
                 $credentials = $session->get('oauth_grant');
-                $request->headers()->put('Authorization', "{$credentials['token_type']} {$credentials['access_token']}");
+                $request->headers()->put('authorization', "{$credentials['token_type']} {$credentials['access_token']}");
 
                 $request->retry();
             });
@@ -235,8 +235,8 @@ class Authorization {
         ));
 
         $request = $this->client->request('POST', $url, array(
-            'Content-Type' => 'application/json;charset=UTF-8',
-            'Content-Length' => strlen($data),
+            'content-type' => 'application/json;charset=UTF-8',
+            'content-length' => strlen($data),
         ));
 
         $request->on('response', function ($clientResponse) use ($response, $request, $callback, $session) {

@@ -77,9 +77,9 @@ class ProxyRequest {
      * @var array
      */
     protected $headersNotAllowed = array(
-        'User-Agent',
-        'Host',
-        'X-XCSRF-TOKEN',
+        'user-agent',
+        'host',
+        //'x-xsrf-token',
     );
 
     /**
@@ -93,7 +93,10 @@ class ProxyRequest {
      */
     public function __construct(HttpClient $client, Server $server, Request $request)
     {
-        $headers = Arr::except($request->getHeaders(), $this->headersNotAllowed);
+        $headers = $request->getHeaders();
+        $headers = array_combine(array_map('strtolower', array_keys($headers)), $headers);
+
+        $headers = Arr::except($headers, $this->headersNotAllowed);
 
         $this->original = $request;
         $this->client = $client;
@@ -102,8 +105,8 @@ class ProxyRequest {
 
         $headers = new Collection($headers);
         $headers->put(
-            'Cookie', 
-            new Collection((new \Guzzle\Parser\Cookie\CookieParser)->parseCookie($headers->get('Cookie')))
+            'cookie', 
+            new Collection((new \Guzzle\Parser\Cookie\CookieParser)->parseCookie($headers->get('cookie')))
         );
 
         $this->headers = $headers;
@@ -205,7 +208,7 @@ class ProxyRequest {
 
         return $this->session = $this->server->make('Illuminate\Session\Store', [
             'name' => $sessionName,
-            'id' => array_get($this->headers()->get('Cookie')->all(), "cookies.{$sessionName}")
+            'id' => array_get($this->headers()->get('cookie')->all(), "cookies.{$sessionName}")
         ]);
     }
 
@@ -260,7 +263,7 @@ class ProxyRequest {
     {
         $method = $this->original->getMethod();
         $url = $this->server->get('api_url') . $this->getPath();
-        $headers = Arr::except($this->headers()->all(), ['Cookie']);
+        $headers = Arr::except($this->headers()->all(), ['cookie']);
 
         $this->request = $this->createClientRequest($method, $url, $headers);
         $this->request->end($this->getBufferEnd());

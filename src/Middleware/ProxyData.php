@@ -35,7 +35,7 @@ class ProxyData {
         $original->on('data', function ($data) use ($response, $original) {
             $response->write($data);
 
-            if ($response->dataLength() === (int) $response->headers()->get('Content-Length', -1)) {
+            if ($response->dataLength() === (int) $response->headers()->get('content-length', -1)) {
                 $original->close();
             }
 

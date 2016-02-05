@@ -62,11 +62,11 @@ class ProxyResponse {
      * @var array
      */
     protected $headersNotAllowed = array(
-        'Access-Control-Allow-Origin',
-        'Access-Control-Request-Method',
-        'Access-Control-Allow-Headers',
-        'Server',
-        'Vary',
+        'access-control-allow-origin',
+        'access-control-request-method',
+        'access-control-allow-headers',
+        'server',
+        'vary',
     );
 
     /**
@@ -136,11 +136,11 @@ class ProxyResponse {
     public function setCookie(Cookie $cookie)
     {
         $cookies = array_merge(
-            $this->headers()->get('Set-Cookie', []),
+            $this->headers()->get('set-cookie', []),
             [$cookie->__toString()]
         );
 
-        $this->headers()->put('Set-Cookie', $cookies);
+        $this->headers()->put('set-cookie', $cookies);
 
         return $this;
     }
